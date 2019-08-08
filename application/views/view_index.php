@@ -1,0 +1,198 @@
+  <div class="content-wrapper" >
+    <section class="content-header">
+      <h1>
+        سیستم جمع آوری پیکره برای پروژه مترجم ماشینی دانشگاه تبریز
+        <small>آزمایشگاه هوش محاسباتی</small>
+      </h1>
+    </section>
+    <section class="content">
+
+    <?php $trans_count = $this->db->query("SELECT count(*) AS trans_count 
+                                        FROM `users`,sentence_bank 
+                                        WHERE sentence_bank.translator = users.id
+                                        AND users.id = ?
+										AND temporary = 0
+                                        GROUP BY users.id", $this->session->userdata("user_id"))->row_array()['trans_count'];
+          $edit_count = $this->db->query("SELECT count(*) AS edit_count 
+                                        FROM `users`,sentence_bank 
+                                        WHERE sentence_bank.editor = users.id
+                                        AND users.id = ?
+                                        GROUP BY users.id", $this->session->userdata("user_id"))->row_array()['edit_count'];
+			
+			$num_words = $this->db->query("SELECT SUM(num_words) AS num_all_words FROM (SELECT SUM(LENGTH(sentence_orig) - LENGTH(REPLACE(sentence_orig, ' ', '')) + 1) AS num_words FROM sentence_bank WHERE translator = ? AND temporary = 0 GROUP By id) AS tbl1", $this->session->userdata('user_id'))->row_array()['num_all_words'];
+    ?>
+      <div class="row">
+        <div class="col-lg-6 col-xs-6">
+			   <a href="translate">
+          <div class="small-box bg-yellow"  style="padding: 20px">
+            <div class="inner">
+              <h4>ترجمه</h4>
+              <p>تعداد ترجمه های شما: <?php echo $trans_count; ?> (<?php echo $num_words; ?> کلمه)</p>
+            </div>
+            <div class="icon" style="margin-top: 20px; margin-bottom:18px">
+              <i class="fa fa-plus"></i>
+            </div>
+          </div>
+			   </a>
+        </div>
+        <div class="col-lg-6 col-xs-6">
+	       <a href="edit">
+          <div class="small-box bg-green"  style="padding:20px">
+            <div class="inner">
+              <h4>بازبینی</h4>
+              <p>تعداد بازبینی های شما: <?php echo $edit_count; ?></p>
+            </div>
+            <div class="icon" style="margin-top: 20px; margin-bottom:18px">
+		         <i class="fa fa-edit"></i>
+            </div>
+          </div>
+	       </a>
+        </div>
+      </div>
+	  <?php if($this->session->userdata('user_type') == 'admin'): ?>
+      <div class="row">
+        <!-- AREA CHART -->
+        <div class="col-lg-12 col-xs-12">
+		  <div class="box box-primary">
+			<div class="box-header with-border">
+			  <h3 class="box-title">فعالیت کل کاربران در ۳۰ روز اخیر</h3>
+			  <div class="box-tools pull-right">
+				<button class="btn btn-box-tool" data-widget="collapse"><i class="fa fa-minus"></i></button>
+				<button class="btn btn-box-tool" data-widget="remove"><i class="fa fa-times"></i></button>
+			  </div>
+			</div>
+			<div class="box-body chart-responsive">
+			  <div class="chart" id="revenue-chart" style="height: 300px;"></div>
+			</div><!-- /.box-body -->
+		  </div><!-- /.box -->
+		</div>
+      </div>
+	  <?php endif ?>
+	  <div class="row">
+        <!-- AREA CHART -->
+        <div class="col-lg-12 col-xs-12">
+		  <div class="box box-primary">
+			<div class="box-header with-border">
+			  <h3 class="box-title">فعالیت شما در ۳۰ روز اخیر</h3>
+			  <div class="box-tools pull-right">
+				<button class="btn btn-box-tool" data-widget="collapse"><i class="fa fa-minus"></i></button>
+				<button class="btn btn-box-tool" data-widget="remove"><i class="fa fa-times"></i></button>
+			  </div>
+			</div>
+			<div class="box-body chart-responsive">
+			  <div class="chart" id="line-chart" style="height: 300px;"></div>
+			</div><!-- /.box-body -->
+		  </div><!-- /.box -->
+		</div>
+      </div>
+      
+
+      <?php 
+        $bolten = $this->db->query("SELECT * FROM bolten WHERE isActive = 1")->result_array();
+      ?>
+    <?php foreach ($bolten as $key => $item): ?>
+      <div class="callout callout-info">
+        <h4><?php echo $item['title']; ?></h4>
+        <?php echo $item['body']; ?>
+      </div>
+    <?php endforeach ?>
+
+      </section>
+    </div>
+  <div class="control-sidebar-bg"></div>
+</div>
+    <script src="assets/plugins/jQuery/jQuery-2.1.4.min.js"></script>
+    <script src="assets/bootstrap/js/bootstrap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/raphael/2.1.0/raphael-min.js"></script>
+    <script src="assets/plugins/morris/morris.min.js"></script>
+    <script src="assets/plugins/fastclick/fastclick.min.js"></script>
+    <script src="assets/dist/js/app.js"></script>
+    <script src="assets/dist/js/demo.js"></script>
+	
+	
+	
+	
+    <script>
+      $(function () {
+        "use strict";
+		
+	<?php if($this->session->userdata('user_type') == 'admin'): ?>
+		<?php $stats = $this->db->query("SELECT IFNULL(num_edit, 0) AS num_edits, IFNULL(num_trans, 0) AS num_translates, GREATEST(IFNULL(edit_date, 0), IFNULL(trans_date, 0)) AS date FROM (SELECT * FROM (SELECT * FROM (SELECT COUNT(*) AS num_edit, DATE_FORMAT(edited_at, '%Y-%m-%d') AS edit_date FROM sentence_bank WHERE removed = 0 AND temporary = 0 GROUP BY DATE_FORMAT(edited_at, '%Y-%m-%d')) AS tbl1 WHERE DATE(edit_date) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND DATE(edit_date) <= NOW()) AS t1 LEFT JOIN (SELECT * FROM (SELECT COUNT(*) AS num_trans, DATE_FORMAT(translated_at, '%Y-%m-%d') AS trans_date FROM sentence_bank WHERE removed = 0 AND temporary = 0 GROUP BY DATE_FORMAT(translated_at, '%Y-%m-%d')) AS tbl1 WHERE DATE(trans_date) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND DATE(trans_date) <= NOW()) AS t2 ON t1.edit_date = t2.trans_date UNION SELECT * FROM (SELECT * FROM (SELECT COUNT(*) AS num_edit, DATE_FORMAT(edited_at, '%Y-%m-%d') AS edit_date FROM sentence_bank WHERE removed = 0 AND temporary = 0 GROUP BY DATE_FORMAT(edited_at, '%Y-%m-%d')) AS tbl1 WHERE DATE(edit_date) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND DATE(edit_date) <= NOW()) AS t1 RIGHT JOIN (SELECT * FROM (SELECT COUNT(*) AS num_trans, DATE_FORMAT(translated_at, '%Y-%m-%d') AS trans_date FROM sentence_bank WHERE removed = 0 AND temporary = 0 GROUP BY DATE_FORMAT(translated_at, '%Y-%m-%d')) AS tbl1 WHERE DATE(trans_date) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND DATE(trans_date) <= NOW()) AS t2 ON t1.edit_date = t2.trans_date) AS tbl3 ORDER BY date DESC")->result_array();
+		?>
+        // AREA CHART
+        var area = new Morris.Line({
+          element: 'revenue-chart',
+          resize: true,
+          data: [
+			<?php
+				$j = count($stats) - 1;;
+				for($i = 30; $i >= 0; $i--){
+					$d=strtotime("-" . $i ." days");
+					if(date_format(date_create($stats[$j]['date']),"Y-m-d") ==  date("Y-m-d", $d)){
+						//echo "j = " .$j . " --- " .  date_format(date_create($stats[$j]['date']),"Y-m-d") . " == " . date("Y-m-d", $d) . " *** ";
+						echo "{y: '".date("Y-m-d", $d)."', item1:".$stats[$j]['num_translates'].", item2: ".$stats[$j]['num_edits']."},";
+					if($j > 0)
+						$j--;
+					}
+					else
+						echo "{y: '".date("Y-m-d", $d)."', item1:0, item2: 0},";
+				}
+			?>
+          ],
+          xkey: 'y',
+          xLabels: 'day',
+		  smooth: true,
+          ykeys: ['item1', 'item2'],
+          labels: ['ترجمه', 'بازبینی'],
+          lineColors: ['#f39c12', '#00a65a'],
+          hideHover: 'auto'
+        });
+		<?php endif ?>
+		
+		
+		
+		 <?php 
+		 $user_id = $this->session->userdata('user_id');
+		 $user_stats = $this->db->query("SELECT IFNULL(num_edit, 0) AS num_edits, IFNULL(num_trans, 0) AS num_translates, GREATEST(IFNULL(edit_date, 0), IFNULL(trans_date, 0)) AS date FROM (SELECT * FROM (SELECT * FROM (SELECT COUNT(*) AS num_edit, DATE_FORMAT(edited_at, '%Y-%m-%d') AS edit_date FROM sentence_bank WHERE removed = 0 AND temporary = 0 AND editor = ? GROUP BY DATE_FORMAT(edited_at, '%Y-%m-%d')) AS tbl1 WHERE DATE(edit_date) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND DATE(edit_date) <= NOW()) AS t1 LEFT JOIN (SELECT * FROM (SELECT COUNT(*) AS num_trans, DATE_FORMAT(translated_at, '%Y-%m-%d') AS trans_date FROM sentence_bank WHERE removed = 0 AND temporary = 0 AND translator = ? GROUP BY DATE_FORMAT(translated_at, '%Y-%m-%d')) AS tbl1 WHERE DATE(trans_date) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND DATE(trans_date) <= NOW()) AS t2 ON t1.edit_date = t2.trans_date UNION	SELECT * FROM (SELECT * FROM (SELECT COUNT(*) AS num_edit, DATE_FORMAT(edited_at, '%Y-%m-%d') AS edit_date FROM sentence_bank WHERE removed = 0 AND temporary = 0 AND editor = ? GROUP BY DATE_FORMAT(edited_at, '%Y-%m-%d')) AS tbl1 WHERE DATE(edit_date) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND DATE(edit_date) <= NOW()) AS t1 RIGHT JOIN (SELECT * FROM (SELECT COUNT(*) AS num_trans, DATE_FORMAT(translated_at, '%Y-%m-%d') AS trans_date FROM sentence_bank WHERE removed = 0 AND temporary = 0 AND translator = ? GROUP BY DATE_FORMAT(translated_at, '%Y-%m-%d')) AS tbl1 WHERE DATE(trans_date) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND DATE(trans_date) <= NOW()) AS t2 ON t1.edit_date = t2.trans_date) AS tbl3 ORDER BY date DESC", array($user_id, $user_id, $user_id, $user_id))->result_array(); 
+		//print_r($user_stats);
+		?>
+		var line = new Morris.Line({
+          element: 'line-chart',
+          resize: true,
+          data: [
+			<?php
+				if(count($user_stats)){
+
+					$j = count($user_stats) - 1;;
+					for($i = 30; $i >= 0; $i--){
+						$d=strtotime("-" . $i ." days");
+						if(date_format(date_create($user_stats[$j]['date']),"Y-m-d") ==  date("Y-m-d", $d)){
+							echo "{y: '".date("Y-m-d", $d)."', item1:".$user_stats[$j]['num_translates'].", item2: ".$user_stats[$j]['num_edits']."},";
+						if($j > 0)
+							$j--;
+						}
+						else
+							echo "{y: '".date("Y-m-d", $d)."', item1:0, item2: 0},";
+					}
+				} else {
+					for($i = 30; $i >= 0; $i--){
+						$d=strtotime("-" . $i ." days");
+						echo "{y: '".date("Y-m-d", $d)."', item1:0, item2: 0},";
+					}
+				}
+			?>
+          ],
+          xkey: 'y',
+          xLabels: 'day',
+		  smooth: true,
+          ykeys: ['item1', 'item2'],
+          labels: ['ترجمه', 'بازبینی'],
+          lineColors: ['#f39c12', '#00a65a'],
+          hideHover: 'auto'
+        });
+		
+		
+      });
+    </script>
+</body>
+</html>
